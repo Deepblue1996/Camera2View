@@ -1,6 +1,7 @@
 package zou.dahua.cameralib;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.ImageFormat;
@@ -11,9 +12,12 @@ import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
+import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
+import android.media.ExifInterface;
 import android.media.Image;
 import android.media.ImageReader;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.support.annotation.NonNull;
@@ -21,14 +25,21 @@ import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.util.Size;
+import android.util.SparseIntArray;
 import android.view.LayoutInflater;
+import android.view.OrientationEventListener;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.LinearLayout;
+import android.widget.Toast;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
@@ -83,7 +94,28 @@ public class CameraView extends LinearLayout {
      */
     private Handler mHandler;
 
+    private static boolean takePhoto = false;
+
+    /**
+     * 视图
+     */
     private TextureView mPreviewView;
+
+    private CameraCaptureSession cameraCaptureSession;
+
+    private OrientationEventListener mScreenOrientationEventListener;
+
+    private int mScreenExifOrientation = 0;
+
+    private static final SparseIntArray ORIENTATION = new SparseIntArray();
+
+    static {
+        ORIENTATION.append(Surface.ROTATION_0, 90);
+        ORIENTATION.append(Surface.ROTATION_90, 0);
+        ORIENTATION.append(Surface.ROTATION_180, 270);
+        ORIENTATION.append(Surface.ROTATION_270, 180);
+    }
+
 
     public CameraView(Context context) {
         super(context);
@@ -93,6 +125,8 @@ public class CameraView extends LinearLayout {
     public CameraView(Context context, @Nullable AttributeSet attrs) {
         super(context, attrs);
         init(context);
+
+
     }
 
     public CameraView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
@@ -100,6 +134,41 @@ public class CameraView extends LinearLayout {
         init(context);
     }
 
+    public void initExt(Activity activity) {
+
+        mScreenOrientationEventListener = new OrientationEventListener(activity) {
+            @Override
+            public void onOrientationChanged(int i) {
+                // i的范围是0～359
+                // 屏幕左边在顶部的时候 i = 90;
+                // 屏幕顶部在底部的时候 i = 180;
+                // 屏幕右边在底部的时候 i = 270;
+                // 正常情况默认i = 0;
+
+                if(45 <= i && i < 135) {
+                    mScreenExifOrientation = ExifInterface.ORIENTATION_ROTATE_180;
+                } else if(135 <= i && i < 225) {
+                    mScreenExifOrientation = ExifInterface.ORIENTATION_ROTATE_270;
+                } else if(225 <= i && i < 315) {
+                    mScreenExifOrientation = ExifInterface.ORIENTATION_NORMAL;
+                } else {
+                    mScreenExifOrientation = ExifInterface.ORIENTATION_ROTATE_90;
+                }
+            }
+        };
+
+        mScreenOrientationEventListener.enable();
+
+        initLooper();
+
+        initView();
+    }
+
+    /**
+     * 初始化
+     *
+     * @param context
+     */
     private void init(Context context) {
         this.context = context;
 
@@ -107,10 +176,6 @@ public class CameraView extends LinearLayout {
         mPreviewView = view.findViewById(R.id.mPreviewView);
 
         addView(view);
-
-        initLooper();
-
-        initView();
     }
 
     /**
@@ -180,6 +245,7 @@ public class CameraView extends LinearLayout {
                      * 获取最佳预览尺寸
                      */
                     mPreviewSize = getCloselyPreSize(dm.heightPixels, dm.widthPixels, sizes);
+
                     /**
                      * 打开相机
                      */
@@ -345,6 +411,9 @@ public class CameraView extends LinearLayout {
         mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mHandler);
         // 这里一定分别add两个surface，一个Textureview的，一个ImageReader的，如果没add，会造成没摄像头预览，或者没有ImageReader的那个回调！！
         mPreviewBuilder.addTarget(surface);
+        //设置拍照方向
+        mPreviewBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATION.get(mScreenExifOrientation));
+
         mPreviewBuilder.addTarget(mImageReader.getSurface());
         try {
             camera.createCaptureSession(
@@ -362,6 +431,7 @@ public class CameraView extends LinearLayout {
 
         @Override
         public void onConfigured(CameraCaptureSession session) {
+            cameraCaptureSession = session;
             updatePreview(session);
         }
 
@@ -399,24 +469,19 @@ public class CameraView extends LinearLayout {
              * reader.acquireNextImage()和close()方法，否则画面就会卡住！！！！！我被这个坑坑了好久！！！
              * 很多人可能写Demo就在这里打一个Log，结果卡住了，或者方法不能一直被回调。
              */
-            Image img = reader.acquireNextImage();
-            /**
-             * 因为Camera2并没有Camera1的Priview回调！！！所以该怎么能到预览图像的byte[]呢？就是在这里了！！！
-             * 我找了好久的办法！！！
-             */
-            /**
-             * 因为Camera2并没有Camera1的Priview回调！！！所以该怎么能到预览图像的byte[]呢？就是在这里了！！！
-             * 我找了好久的办法！！！
-             */
-            ByteBuffer buffer = img.getPlanes()[0].getBuffer();
-            // 这里就是图片的byte数组了
-            byte[] bytes = new byte[buffer.remaining()];
-
-            img.close();
+            final Image img = reader.acquireNextImage();
+            //执行图像保存子线程
+            if (takePhoto) {
+                mHandler.post(new imageSaver(img));
+            } else {
+                img.close();
+            }
         }
     };
 
-
+    /**
+     * 暂停
+     */
     public void onPause() {
 
         if (null != cameraDevice) {
@@ -429,6 +494,9 @@ public class CameraView extends LinearLayout {
         }
     }
 
+    /**
+     * 恢复
+     */
     public void onResume() {
 
         if (cameraManager != null) {
@@ -450,6 +518,91 @@ public class CameraView extends LinearLayout {
             } catch (CameraAccessException e) {
                 e.printStackTrace();
             }
+        }
+    }
+
+    /**
+     * 保存线程
+     */
+    public static class imageSaver implements Runnable {
+        private Image mImage;
+        private File mImageFile;
+
+        public imageSaver(Image image) {
+            mImage = image;
+        }
+
+        @Override
+        public void run() {
+            ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
+            byte[] data = new byte[buffer.remaining()];
+            buffer.get(data);
+
+            File f = new File(Environment.getExternalStorageDirectory() + "/DCIM/Camera2/");
+            if (!f.exists()) {
+                mImageFile.mkdirs();
+            }
+            mImageFile = new File(Environment.getExternalStorageDirectory() + "/DCIM/Camera2/" + System.currentTimeMillis() + ".jpg");
+            FileOutputStream fos = null;
+            try {
+                fos = new FileOutputStream(mImageFile);
+                fos.write(data, 0, data.length);
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                mImageFile = null;
+                if (fos != null) {
+                    try {
+                        fos.close();
+                        fos = null;
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+            mImage.close();
+            takePhoto = false;
+        }
+    }
+
+    /**
+     * 拍照
+     */
+    public void capture() {
+        try {
+            takePhoto = true;
+            //首先我们创建请求拍照的CaptureRequest
+            final CaptureRequest.Builder mCaptureBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
+            //获取屏幕方向
+            int rotation = mScreenExifOrientation;
+            //设置CaptureRequest输出到mImageReader
+            mCaptureBuilder.addTarget(mImageReader.getSurface());
+            //设置拍照方向
+            mCaptureBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATION.get(rotation));
+            //这个回调接口用于拍照结束时重启预览，因为拍照会导致预览停止
+            CameraCaptureSession.CaptureCallback mImageSavedCallback = new CameraCaptureSession.CaptureCallback() {
+                @Override
+                public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, TotalCaptureResult result) {
+                    Toast.makeText(context, "Image Saved!", Toast.LENGTH_SHORT).show();
+                    //重启预览
+                    restartPreview();
+                }
+            };
+            //停止预览
+            cameraCaptureSession.stopRepeating();
+            //开始拍照，然后回调上面的接口重启预览，因为mCaptureBuilder设置ImageReader作为target，所以会自动回调ImageReader的onImageAvailable()方法保存图片
+            cameraCaptureSession.capture(mCaptureBuilder.build(), mImageSavedCallback, null);
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void restartPreview() {
+        try {
+            //执行setRepeatingRequest方法就行了，注意mCaptureRequest是之前开启预览设置的请求
+            cameraCaptureSession.setRepeatingRequest(mPreviewBuilder.build(), null, mHandler);
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
         }
     }
 }

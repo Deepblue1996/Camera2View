@@ -4,6 +4,8 @@ import android.Manifest;
 import android.app.Activity;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.view.View;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.tbruyelle.rxpermissions2.RxPermissions;
@@ -15,6 +17,7 @@ import zou.dahua.cameralib.CameraView;
 public class MainActivity extends AppCompatActivity {
 
     private CameraView cameraView;
+    private TextView takePhotoLin;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -24,6 +27,17 @@ public class MainActivity extends AppCompatActivity {
         initPer(this);
 
         cameraView = findViewById(R.id.cameraView);
+
+        cameraView.initExt(this);
+
+        takePhotoLin = findViewById(R.id.takePhotoLin);
+
+        takePhotoLin.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                cameraView.capture();
+            }
+        });
     }
 
     /**
