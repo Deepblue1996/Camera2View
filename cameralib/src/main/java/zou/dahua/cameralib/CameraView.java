@@ -134,7 +134,7 @@ public class CameraView extends LinearLayout {
         init(context);
     }
 
-    public void initExt(Activity activity) {
+    public void show(Activity activity) {
 
         mScreenOrientationEventListener = new OrientationEventListener(activity) {
             @Override

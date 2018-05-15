@@ -28,7 +28,7 @@ public class MainActivity extends AppCompatActivity {
 
         cameraView = findViewById(R.id.cameraView);
 
-        cameraView.initExt(this);
+        cameraView.show(this);
 
         takePhotoLin = findViewById(R.id.takePhotoLin);
 
