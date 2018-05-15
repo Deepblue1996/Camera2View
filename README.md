@@ -7,7 +7,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
 ```
-初始化
+照相机画布显示
 ```
 cameraView.show(this);
 ```
