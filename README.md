@@ -9,9 +9,10 @@
 ```
 初始化
 ```
-cameraView.initExt(this);
+cameraView.show(this);
 ```
 **1.在AndroidManifest.xml申明所需要的权限：**
+
 （注：请确保进入Camera2的时候已经拥有这三项权限了，Android6.0需要动态去申请权限）
 ```
    <uses-permission android:name="android.permission.CAMERA" />
