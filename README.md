@@ -1,11 +1,23 @@
 # Camera2View
 
-<pre><code>
+
+```
 <zou.dahua.cameralib.CameraView
         android:id="@+id/cameraView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
-</code></pre>
+```
+初始化
+```
+cameraView.initExt(this);
+```
+**1.在AndroidManifest.xml申明所需要的权限：**
+（注：请确保进入Camera2的时候已经拥有这三项权限了，Android6.0需要动态去申请权限）
+```
+   <uses-permission android:name="android.permission.CAMERA" />
+   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+   <uses-permission android:name="android.permission.RECORD_AUDIO" />
+```
 
 How to
 
@@ -18,15 +30,17 @@ maven
 sbt
 leiningen
 Add it in your root build.gradle at the end of repositories:
-
-	allprojects {
-		repositories {
-			...
-			maven { url 'https://jitpack.io' }
-		}
-	}Copy
-Step 2. Add the dependency
-
-	dependencies {
-	        implementation 'com.github.Deepblue1996:Camera2View:0.2.0'
+```
+allprojects {
+	repositories {
+		...
+		maven { url 'https://jitpack.io' }
 	}
+}
+```
+Step 2. Add the dependency
+```
+dependencies {
+	implementation 'com.github.Deepblue1996:Camera2View:0.2.0'
+}
+```
