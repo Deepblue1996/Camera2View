@@ -1,5 +1,12 @@
 # Camera2View
 
+<pre><code>
+<zou.dahua.cameralib.CameraView
+        android:id="@+id/cameraView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
+</code></pre>
+
 How to
 
 To get a Git project into your build:
